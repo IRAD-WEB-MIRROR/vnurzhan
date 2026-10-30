@@ -1,3 +1,5 @@
 User-agent: *
 Allow: /
+Disallow: /news/gubernator-ne-poyavlyaetsya-na-publike.html
+Disallow: /news/irad-ne-prodayotsya-marsh-v-nurzhane.html
 Sitemap: https://vnurzhan.com/sitemap.xml
