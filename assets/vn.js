@@ -83,12 +83,32 @@
     ["«Офицеры» (1971)", "Officers (1971)"], ["«Джентльмены удачи» (1971)", "Gentlemen of Fortune (1971)"], ["«Добро пожаловать, или Посторонним вход воспрещён» (1964)", "Welcome, or No Trespassing (1964)"],
     ["«Берегись автомобиля» (1966)", "Beware of the Car (1966)"], ["«Иван Васильевич меняет профессию» (1973)", "Ivan Vasilievich Changes Profession (1973)"]
   ];
+  /* IradOdin's own grid, from ru.iradone.com (falls back to the built-in grid below) */
+  var ODIN = null;
+  function mins(t) { var p = t.split(":"); var m = +p[0] * 60 + +p[1]; return m < 300 ? m + 1440 : m; }
+  function odinRows(d) {
+    var k = dayIdx(d), wd = d.getDay(), iso = d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate());
+    var F = ODIN.films || [], FE = ODIN.films_en || F;
+    var L = ODIN.grid.map(function (s) { return { t: s.t, id: (s.days && s.days[wd]) || s.show }; });
+    (ODIN.specials || []).forEach(function (sp) {
+      if (sp.date !== iso) return;
+      var a = mins(sp.from), b = mins(sp.to);
+      L = L.filter(function (s) { var m = mins(s.t); return m < a || m >= b; }).concat(sp.slots.map(function (s) { return { t: s.t, id: s.show }; }));
+    });
+    L.sort(function (x, y) { return mins(x.t) - mins(y.t); });
+    function fill(t, list) { return t.replace("{film1}", list[k % list.length] || "").replace("{film2}", list[(k + 4) % list.length] || ""); }
+    return L.filter(function (s) { return s.id !== "signoff" && mins(s.t) < 1440; }).map(function (s) {
+      var sh = ODIN.shows[s.id] || { title: s.id };
+      return { t: s.t, ru: fill(sh.title, F), en: fill(sh.title_en || sh.title, FE), hl: !!sh.hl };
+    });
+  }
   function dayIdx(d) { return Math.floor(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()) / 86400000); }
   function grid(ch, d) {
     var wd = d.getDay(), k = dayIdx(d), f1 = FILMS[k % FILMS.length], f2 = FILMS[(k + 4) % FILMS.length];
     var iso = d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate());
     var L = [];
     function add(t, ru, en, hl, sub) { L.push({ t: t, ru: ru, en: en, hl: hl, sub: sub }); }
+    if (ch === "odin" && ODIN) return odinRows(d);
     if (ch === "odin") {
       add("06:00", "Гимн. Новости", "Anthem. News");
       add("06:15", "«Доброе утро, Ирад» (утренний канал)", "Good Morning, Irad (breakfast programme)");
@@ -138,11 +158,12 @@
     return '<li class="' + (r.hl ? "hl " : "") + (now ? "now" : "") + '"><b>' + r.t + "</b><span>" + (EN ? r.en : r.ru) + (r.sub ? "<em>" + (EN ? r.sub[1] : r.sub[0]) + "</em>" : "") + "</span></li>";
   }
   var tvNow = document.getElementById("vn-tvnow");
-  if (tvNow) {
+  function drawNow() {
     var d = iradNow(), L = grid("odin", d), hm = pad(d.getHours()) + ":" + pad(d.getMinutes()), cur = 0;
     L.forEach(function (r, i) { if (r.t <= hm) cur = i; });
     tvNow.innerHTML = L.slice(cur, cur + 5).map(function (r, i) { return li(r, i === 0); }).join("");
   }
+  if (tvNow) drawNow();
   var tvPage = document.getElementById("vn-tv");
   if (tvPage) {
     var base = iradNow(), monday = new Date(base); monday.setDate(base.getDate() - ((base.getDay() + 6) % 7));
@@ -150,7 +171,7 @@
     for (var i = 0; i < 7; i++) { var dd = new Date(monday); dd.setDate(monday.getDate() + i); days.push(dd); }
     function show(dd) {
       Array.prototype.forEach.call(tabs.children, function (b) { b.classList.toggle("on", b.getAttribute("data-k") === String(dayIdx(dd))); });
-      tvPage.innerHTML = ["odin", "one", "chu"].map(function (c) { return "<div><h3>" + (EN ? CH[c].en : CH[c].ru) + '</h3><ul class="plain">' + grid(c, dd).map(function (r) { return li(r); }).join("") + "</ul></div>"; }).join("");
+      tvPage.innerHTML = ["odin", "one", "chu"].map(function (c) { return "<div><h3>" + (c === "odin" ? '<a href="https://ru.iradone.com/">' + (EN ? CH[c].en : CH[c].ru) + "</a>" : (EN ? CH[c].en : CH[c].ru)) + '</h3><ul class="plain">' + grid(c, dd).map(function (r) { return li(r); }).join("") + "</ul></div>"; }).join("");
     }
     days.forEach(function (dd) {
       var b = document.createElement("button"); b.setAttribute("data-k", dayIdx(dd));
@@ -159,6 +180,11 @@
     });
     show(base);
   }
+  fetch("https://ru.iradone.com/data/schedule.json").then(function (r) { if (!r.ok) throw r; return r.json(); }).then(function (data) {
+    ODIN = data;
+    if (tvNow) drawNow();
+    var on = tvPage && document.querySelector("#vn-tvtabs .on"); if (on) on.click();
+  }).catch(function () {});
 
   /* search over the articles on the site */
   var sf = document.getElementById("vn-search");
