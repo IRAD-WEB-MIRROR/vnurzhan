@@ -210,6 +210,46 @@
     if (l) { document.getElementById("vn-live").classList.toggle("on"); }
   });
 
+  /* "Хватит ли зарплаты" calculator (news/khvatit-li-zarplaty-prozhitochnyy-minimum): Tax Code 2009 (income tax 10%,
+     State Pension Fund 2% from the employee), the TSO subsistence minimum for Q3 2026, rents and prices from today.json */
+  (function () {
+    var el = document.getElementById("vn-wage"); if (!el) return;
+    var SM = { a: 1040, p: 800, c: 900 };
+    var RENT = [["", "Не снимаю жильё", "I don't rent", 0], ["rent-nurzhan", "1-комн. квартира, Нуржан", "1-room flat, Nurzhan", 975], ["rent-talas", "1-комн. квартира, Талас", "1-room flat, Talas", 1250], ["rent-iyik-janyl", "1-комн. квартира, Ийык-Джаныл", "1-room flat, Iyık Janyl", 800]];
+    var P = {};
+    function n0(x) { return String(Math.round(x)).replace(/\B(?=(\d{3})+(?!\d))/g, EN ? "," : " "); }
+    function som(p) { return p.som != null ? p.som : (p.som_min + p.som_max) / 2; }
+    function num(id, lab, v, max) { return '<label>' + lab + ' <input type="number" id="' + id + '" min="0" max="' + max + '" value="' + v + '"></label>'; }
+    el.innerHTML = '<h3>' + T("Калькулятор «ВН»: хватит ли зарплаты", "VN calculator: will your wage stretch?") + '</h3><form onsubmit="return false">' +
+      num("wcG", T("Зарплата до вычетов, сомов в месяц", "Wage before deductions, som a month"), 3900, 999999) +
+      num("wcA", T("Взрослых, включая вас", "Adults, including you"), 1, 9) +
+      num("wcP", T("Пенсионеров", "Pensioners"), 0, 9) +
+      num("wcC", T("Детей", "Children"), 0, 9) +
+      '<label>' + T("Жильё", "Housing") + ' <select id="wcR">' + RENT.map(function (r) { return '<option value="' + r[0] + '">' + (EN ? r[2] : r[1]) + "</option>"; }).join("") + "</select></label></form><div id=\"wcOut\"></div>";
+    function v(id) { var x = +document.getElementById(id).value; return x > 0 ? x : 0; }
+    function draw() {
+      var g = v("wcG"), tax = g * 0.10, pens = g * 0.02, net = g - tax - pens;
+      var a = Math.max(1, v("wcA")), p = v("wcP"), c = v("wcC"), n = a + p + c, sm = a * SM.a + p * SM.p + c * SM.c;
+      var r = RENT.filter(function (x) { return x[0] === document.getElementById("wcR").value; })[0];
+      var rent = r[0] ? (P[r[0]] ? som(P[r[0]]) : r[3]) : 0, left = net - rent - sm;
+      var row = function (l, x, b) { return "<tr" + (b ? ' class="tot"' : "") + "><td>" + l + "</td><td>" + x + "</td></tr>"; };
+      var h = "<table>" + row(T("Начислено", "Gross wage"), n0(g)) + row(T("Подоходный налог, 10%", "Income tax, 10%"), "− " + n0(tax)) +
+        row(T("Пенсионный фонд, 2%", "Pension Fund, 2%"), "− " + n0(pens)) + row(T("На руки", "Paid to you"), n0(net), 1) +
+        (rent ? row((EN ? r[2] : r[1]) + T(" (середина цен)", " (middle of the range)"), "− " + n0(rent)) : "") +
+        row(T("Прожиточный минимум на " + n + " чел.", "Subsistence minimum for " + n + (n > 1 ? " people" : " person")), "− " + n0(sm)) +
+        row(left >= 0 ? T("Остаётся", "Left over") : T("Не хватает", "Short by"), n0(Math.abs(left)) + T(" сом.", " som"), 1) + "</table>";
+      if (P.bread && P.plov && P["petrol-92"]) h += '<p class="meta">' + T("Зарплаты на руки хватит на ", "Your take-home pay would buy ") + n0(Math.floor(net / som(P.bread))) + T(" буханок хлеба, или ", " loaves of bread, or ") + n0(Math.floor(net / som(P.plov))) + T(" порций плова, или ", " plates of plov, or ") + n0(Math.floor(net / som(P["petrol-92"]))) + T(" литров АИ-92.", " litres of AI-92.") + "</p>";
+      h += '<p class="meta">' + T("Прожиточный минимум — ТСУ, III квартал 2026. Аренда и цены — на сегодня.", "Subsistence minimum: TSO, Q3 2026. Rent and prices: today's.") + "</p>";
+      document.getElementById("wcOut").innerHTML = h;
+    }
+    Array.prototype.forEach.call(el.querySelectorAll("input,select"), function (i) { i.addEventListener("input", draw); i.addEventListener("change", draw); });
+    draw();
+    fetch("https://iradone.com/data/today.json", { cache: "no-store" }).then(function (r) { return r.json(); }).then(function (d) {
+      var pr = d.prices || {}; (Array.isArray(pr) ? pr : [].concat(pr.food || [], pr.fuel || [], pr.transport || [], pr.rent || [])).forEach(function (x) { P[x.id] = x; });
+      draw();
+    }).catch(function () {});
+  })();
+
   /* share */
   document.addEventListener("click", function (e) {
     var b = e.target.closest && e.target.closest("[data-copy]");
